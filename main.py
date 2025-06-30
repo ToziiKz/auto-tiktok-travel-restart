@@ -39,10 +39,18 @@ def gen_video(prompt: str):
         "Content-Type": "application/json"
     }
     body = {"prompt": prompt, "duration": DURATION}
-    job = requests.post(
-        "https://api.runwayml.com/v1/generate/video",
-        headers=headers, json=body).json()
-    job_id = job["id"]
+job = requests.post(
+    "https://api.runwayml.com/v1/generate/video",
+    headers=headers, json=body).json()
+
+print("↪️  Réponse Runway :", job)          # ligne de debug
+
+# si la clé “id” n’existe pas, on arrête tout de suite avec un message clair
+if "id" not in job:
+    raise RuntimeError(f"Runway error → {job}")
+
+job_id = job["id"]
+
 
     status = job["status"]
     while status not in ("succeeded", "failed"):
