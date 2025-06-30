@@ -1,11 +1,15 @@
-import os, json, subprocess, time, requests
+import os
+import json
+import time
+import subprocess
+import requests
 from openai import OpenAI
 
-# ---------- PARAMÈTRES GÉNÉRAUX ----------
-DURATION = 15           # durée vidéo en secondes
+# ───────── PARAMÈTRES GÉNÉRAUX ─────────
+DURATION = 15                   # durée de la vidéo IA (secondes)
 
-# ---------- ÉTAPE 1 : générer l’idée ----------
-def generate_idea():
+# ───────── ÉTAPE 1 : GÉNÉRATION D’IDÉE (GPT) ─────────
+def generate_idea() -> dict:
     client = OpenAI(api_key=os.environ["OPENAI_KEY"])
 
     prompt = (
@@ -21,44 +25,44 @@ def generate_idea():
         response_format={"type": "json_object"}
     )
 
-    raw = res.choices[0].message.content     # ← chaîne JSON
-    idea = json.loads(raw)                   # ← conversion en dict
+    raw = res.choices[0].message.content  # chaîne JSON
+    idea = json.loads(raw)                # dict Python
 
-    with open("idea.json", "w") as f:
+    with open("idea.json", "w", encoding="utf-8") as f:
         json.dump(idea, f, ensure_ascii=False, indent=2)
 
     print("💡 Idée générée :", idea["title"])
     return idea
 
-
-# ---------- ÉTAPE 2 : générer la vidéo Runway ----------
-# ---------- ÉTAPE 2 : générer la vidéo Runway ----------
-def gen_video(prompt: str):
+# ───────── ÉTAPE 2 : VIDÉO IA (RUNWAY GEN-2) ─────────
+def gen_video(prompt: str) -> None:
     print("🎞️  Génération Runway…")
-        headers = {
+
+    headers = {
         "Authorization": f"Bearer {os.environ['RUNWAY_KEY']}",
         "Content-Type": "application/json",
-        "X-Runway-Version": "2024-11-06"    # ← ajoute cette ligne
+        "X-Runway-Version": "2024-11-06"     # version API obligatoire
     }
+
     body = {"prompt": prompt, "duration": DURATION}
 
-    # 1. Lancement du job
+    # 1. Lancer le job
     job = requests.post(
         "https://api.runwayml.com/v1/generate/video",
         headers=headers,
         json=body
     ).json()
 
-    print("↪️  Réponse Runway :", job)          # ligne de debug
+    print("↪️  Réponse Runway :", job)        # log de debug
 
-    # 2. Si pas de clé “id”, on arrête et affiche l’erreur complète
+    # 2. Erreur immédiate ?
     if "id" not in job:
         raise RuntimeError(f"Runway error → {job}")
 
     job_id = job["id"]
     status = job["status"]
 
-    # 3. Polling jusqu’à succès ou échec
+    # 3. Polling jusqu’au résultat
     while status not in ("succeeded", "failed"):
         time.sleep(6)
         status = requests.get(
@@ -70,7 +74,7 @@ def gen_video(prompt: str):
     if status == "failed":
         raise RuntimeError("Runway generation failed")
 
-    # 4. Téléchargement du MP4 final
+    # 4. Téléchargement du clip
     url = requests.get(
         f"https://api.runwayml.com/v1/generate/video/{job_id}",
         headers=headers
@@ -81,21 +85,40 @@ def gen_video(prompt: str):
         f.write(mp4)
     print("✅ clip.mp4 prêt")
 
+# ───────── ÉTAPE 3 : VOIX-OFF IA (ELEVENLABS) ─────────
+def gen_voice(text: str) -> None:
+    print("🔊  Génération voix-off…")
 
-# ---------- ÉTAPE 4 : fusionner audio + vidéo ----------
-def merge():
+    voice_id = "TxGEqnHWrfWFTfGW9XjX"         # voix FR “Warm”
+    headers = {
+        "xi-api-key": os.environ["ELEVEN_KEY"],
+        "Content-Type": "application/json"
+    }
+    body = {"text": text, "model_id": "eleven_multilingual_v2"}
+
+    wav = requests.post(
+        f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream",
+        headers=headers,
+        json=body
+    ).content
+
+    with open("voice.mp3", "wb") as f:
+        f.write(wav)
+    print("✅ voice.mp3 prêt")
+
+# ───────── ÉTAPE 4 : FUSION FFmpeg ─────────
+def merge() -> None:
     print("🎬  Fusion audio/vidéo…")
     subprocess.run([
         "ffmpeg", "-i", "clip.mp4", "-i", "voice.mp3",
         "-c:v", "copy", "-c:a", "aac", "-shortest", "output.mp4",
         "-loglevel", "quiet", "-y"
-    ])
+    ], check=True)
     print("🏁 output.mp4 généré")
 
-
-# ---------- PIPELINE COMPLET ----------
+# ───────── PIPELINE COMPLET ─────────
 if __name__ == "__main__":
-    idea = generate_idea()
-    gen_video(idea["runway_prompt"])
-    gen_voice(idea["voice"])
+    idea_data = generate_idea()
+    gen_video(idea_data["runway_prompt"])
+    gen_voice(idea_data["voice"])
     merge()
