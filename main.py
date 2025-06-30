@@ -9,21 +9,22 @@ RES      = "1080x1920"  # portrait
 def generate_idea():
     client = OpenAI(api_key=os.environ["OPENAI_KEY"])
     prompt = (
-        "Crée une idée de vidéo voyage TikTok 15 s. "
-        "Réponds en JSON : "
-        '{"title","description","hashtags","voice","runway_prompt"}. '
-        "Description 140-250 car., 5 hashtags sans # séparés par espaces."
+        "Tu es un générateur JSON strict. Réponds UNIQUEMENT par un objet JSON "
+        'avec les clés : "title", "description", "hashtags", "voice", "runway_prompt". '
+        "Description 140-250 caractères, 5 hashtags séparés par des espaces."
     )
     res = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[{"role":"user","content":prompt}],
-        temperature=1.1
+        messages=[{"role": "user", "content": prompt}],
+        temperature=1.1,
+        response_format={"type": "json_object"}   # ← ajoute cette ligne
     )
-    idea = json.loads(res.choices[0].message.content)
-    with open("idea.json","w") as f:
-        json.dump(idea,f,ensure_ascii=False,indent=2)
+    idea = res.choices[0].message.model_dump()['content']  # déjà dict
+    with open("idea.json", "w") as f:
+        json.dump(idea, f, ensure_ascii=False, indent=2)
     print("💡 Idée :", idea["title"])
     return idea
+
 
 # ---------- Runway Gen-2 ----------
 def gen_video(prompt):
