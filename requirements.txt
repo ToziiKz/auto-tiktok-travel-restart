@@ -1,6 +1,5 @@
 openai>=1.14.0
 requests>=2.31.0
-runway-python==0.4.4     # SDK officiel Gen-2
 elevenlabs==1.1.0        # TTS IA
 python-dotenv>=1.0.1
 ffmpeg-python==0.2.0     # wrapper pour fusion audio/vidéo
