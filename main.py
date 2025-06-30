@@ -130,6 +130,8 @@ def merge() -> None:
 # ───────── PIPELINE COMPLET ─────────
 if __name__ == "__main__":
     idea_data = generate_idea()
-    gen_video(idea_data["runway_prompt"])
+    if not generate_video(idea_data["runway_prompt"]):
+    print("🛑 Arrêt du script car la génération vidéo a échoué.")
+    return # ou exit()
     gen_voice(idea_data["voice"])
     merge()
