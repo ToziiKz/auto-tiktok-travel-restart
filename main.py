@@ -32,6 +32,7 @@ def generate_idea():
 
 
 # ---------- ÉTAPE 2 : générer la vidéo Runway ----------
+# ---------- ÉTAPE 2 : générer la vidéo Runway ----------
 def gen_video(prompt: str):
     print("🎞️  Génération Runway…")
     headers = {
@@ -39,52 +40,45 @@ def gen_video(prompt: str):
         "Content-Type": "application/json"
     }
     body = {"prompt": prompt, "duration": DURATION}
-job = requests.post(
-    "https://api.runwayml.com/v1/generate/video",
-    headers=headers, json=body).json()
 
-print("↪️  Réponse Runway :", job)          # ligne de debug
+    # 1. Lancement du job
+    job = requests.post(
+        "https://api.runwayml.com/v1/generate/video",
+        headers=headers,
+        json=body
+    ).json()
 
-# si la clé “id” n’existe pas, on arrête tout de suite avec un message clair
-if "id" not in job:
-    raise RuntimeError(f"Runway error → {job}")
+    print("↪️  Réponse Runway :", job)          # ligne de debug
 
-job_id = job["id"]
+    # 2. Si pas de clé “id”, on arrête et affiche l’erreur complète
+    if "id" not in job:
+        raise RuntimeError(f"Runway error → {job}")
 
-
+    job_id = job["id"]
     status = job["status"]
+
+    # 3. Polling jusqu’à succès ou échec
     while status not in ("succeeded", "failed"):
         time.sleep(6)
         status = requests.get(
             f"https://api.runwayml.com/v1/generate/video/{job_id}",
-            headers=headers).json()["status"]
+            headers=headers
+        ).json()["status"]
         print("  status :", status)
 
     if status == "failed":
         raise RuntimeError("Runway generation failed")
 
+    # 4. Téléchargement du MP4 final
     url = requests.get(
         f"https://api.runwayml.com/v1/generate/video/{job_id}",
-        headers=headers).json()["video_url"]
+        headers=headers
+    ).json()["video_url"]
+
     mp4 = requests.get(url).content
-    open("clip.mp4", "wb").write(mp4)
+    with open("clip.mp4", "wb") as f:
+        f.write(mp4)
     print("✅ clip.mp4 prêt")
-
-
-# ---------- ÉTAPE 3 : générer la voix-off ElevenLabs ----------
-def gen_voice(text: str):
-    print("🔊  Génération voix-off…")
-    voice_id = "TxGEqnHWrfWFTfGW9XjX"   # voix FR « Warm »
-    headers = {
-        "xi-api-key": os.environ["ELEVEN_KEY"],
-        "Content-Type": "application/json"
-    }
-    body = {"text": text, "model_id": "eleven_multilingual_v2"}
-    wav = requests.post(
-        f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream",
-        headers=headers, json=body).content
-    open("voice.mp3", "wb").write(wav)
-    print("✅ voice.mp3 prêt")
 
 
 # ---------- ÉTAPE 4 : fusionner audio + vidéo ----------
