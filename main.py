@@ -35,55 +35,66 @@ def generate_idea() -> dict:
     return idea
 
 # ───────── ÉTAPE 2 : VIDÉO IA (RUNWAY GEN-2) ─────────
-def gen_video(prompt: str) -> None:
-    print("🎞️  Génération Runway…")
+# ───────── ÉTAPE 2 : VIDÉO IA (RUNWAY GEN-2) ─────────
+def generate_video(prompt: str) -> bool:
+    """Génère une vidéo à partir d'un prompt avec RunwayML."""
+    print("🎞️  Étape 2 : Génération de la vidéo avec Runway...")
+    try:
+        # NOTE : L'en-tête "Runway-Version" n'est plus nécessaire avec la v2 de l'API
+        headers = {
+            "Authorization": f"Bearer {os.environ['RUNWAY_KEY']}",
+            "Content-Type": "application/json",
+        }
+        # NOTE : Le paramètre s'appelle maintenant "duration_seconds"
+        # NOTE : L'URL de l'API est maintenant "/v2/generate"
+        body = {"prompt": prompt, "duration_seconds": DURATION}
 
-    headers = {
-        "Authorization": f"Token {os.environ['RUNWAY_KEY']}",
-        "Content-Type": "application/json",
-        "X-Runway-Version": "2024-11-06"     # version API obligatoire
-    }
+        # 1. Lancer le job de génération
+        post_res = requests.post("https://api.runwayml.com/v2/generate", headers=headers, json=body)
+        post_res.raise_for_status()
+        job = post_res.json()
+        task_id = job["id"]
 
-    body = {"prompt": prompt, "duration": DURATION}
+        # 2. Polling pour vérifier le statut jusqu'au résultat
+        # NOTE : L'URL pour vérifier le statut est maintenant "/v2/tasks/{task_id}"
+        while True:
+            time.sleep(8)
+            get_res = requests.get(f"https://api.runwayml.com/v2/tasks/{task_id}", headers=headers)
+            get_res.raise_for_status()
+            job_status = get_res.json()
+            
+            status = job_status.get("status")
+            print(f"  - Statut Runway : {status}")
 
-    # 1. Lancer le job
-    job = requests.post(
-        "https://api.runway.team/v1/image_to_video",
-        headers=headers,
-        json=body
-    ).json()
+            if status == "SUCCEEDED":
+                video_url = job_status["output"]["video_url"]
+                break
+            elif status == "FAILED":
+                error_message = job_status.get("error_message", "Erreur inconnue")
+                print(f"❌ La génération Runway a échoué : {error_message}")
+                return False
 
-    print("↪️  Réponse Runway :", job)        # log de debug
+        # 3. Téléchargement du clip
+        print("  - Téléchargement du clip...")
+        video_content = requests.get(video_url).content
+        with open(VIDEO_CLIP_FILE, "wb") as f:
+            f.write(video_content)
 
-    # 2. Erreur immédiate ?
-    if "id" not in job:
-        raise RuntimeError(f"Runway error → {job}")
+        print(f"✅ Vidéo '{VIDEO_CLIP_FILE}' prête.")
+        return True
 
-    job_id = job["id"]
-    status = job["status"]
-
-    # 3. Polling jusqu’au résultat
-    while status not in ("succeeded", "failed"):
-        time.sleep(6)
-        status = requests.get(
-            f"https://api.runwayml.com/v1/generate/video/{job_id}",
-            headers=headers
-        ).json()["status"]
-        print("  status :", status)
-
-    if status == "failed":
-        raise RuntimeError("Runway generation failed")
-
-    # 4. Téléchargement du clip
-    url = requests.get(
-        f"https://api.runwayml.com/v1/generate/video/{job_id}",
-        headers=headers
-    ).json()["video_url"]
-
-    mp4 = requests.get(url).content
-    with open("clip.mp4", "wb") as f:
-        f.write(mp4)
-    print("✅ clip.mp4 prêt")
+    except requests.exceptions.HTTPError as e:
+        print(f"❌ Erreur HTTP avec l'API Runway : {e}. Réponse : {e.response.text}")
+        return False
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Erreur de connexion avec l'API Runway : {e}")
+        return False
+    except KeyError:
+        print("❌ Erreur : La clé API 'RUNWAY_KEY' n'est pas définie.")
+        return False
+    except Exception as e:
+        print(f"❌ Une erreur inattendue est survenue dans generate_video : {e}")
+        return False
 
 # ───────── ÉTAPE 3 : VOIX-OFF IA (ELEVENLABS) ─────────
 def gen_voice(text: str) -> None:
