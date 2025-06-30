@@ -1,9 +1,88 @@
-import subprocess, os, sys
+import os, json, subprocess, time, requests
+from openai import OpenAI
 
-def create_black_clip():
-    # Génère un clip noir de 15 s en 1080x1920
-    subprocess.run(["ffmpeg", "-f", "lavfi", "-i", "color=black:s=1080x1920:d=15", "output.mp4", "-y", "-loglevel", "quiet"])
-    print("✔️ Clip noir généré : output.mp4")
+# ---------- PARAMÈTRES ----------
+DURATION = 15           # secondes
+RES      = "1080x1920"  # portrait
 
+# ---------- GPT : idée + script ----------
+def generate_idea():
+    client = OpenAI(api_key=os.environ["OPENAI_KEY"])
+    prompt = (
+        "Crée une idée de vidéo voyage TikTok 15 s. "
+        "Réponds en JSON : "
+        '{"title","description","hashtags","voice","runway_prompt"}. '
+        "Description 140-250 car., 5 hashtags sans # séparés par espaces."
+    )
+    res = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role":"user","content":prompt}],
+        temperature=1.1
+    )
+    idea = json.loads(res.choices[0].message.content)
+    with open("idea.json","w") as f:
+        json.dump(idea,f,ensure_ascii=False,indent=2)
+    print("💡 Idée :", idea["title"])
+    return idea
+
+# ---------- Runway Gen-2 ----------
+def gen_video(prompt):
+    print("🎞️  Génération Runway…")
+    headers = {
+        "Authorization": f"Bearer {os.environ['RUNWAY_KEY']}",
+        "Content-Type": "application/json"
+    }
+    body = {"prompt": prompt, "duration": DURATION}
+    job = requests.post(
+        "https://api.runwayml.com/v1/generate/video",
+        headers=headers, json=body).json()
+    job_id = job["id"]
+
+    status = job["status"]
+    while status not in ("succeeded","failed"):
+        time.sleep(6)
+        status = requests.get(
+            f"https://api.runwayml.com/v1/generate/video/{job_id}",
+            headers=headers).json()["status"]
+        print("  status :", status)
+    if status == "failed":
+        raise RuntimeError("Runway generation failed")
+
+    url = requests.get(
+        f"https://api.runwayml.com/v1/generate/video/{job_id}",
+        headers=headers).json()["video_url"]
+    mp4 = requests.get(url).content
+    open("clip.mp4","wb").write(mp4)
+    print("✅ clip.mp4 prêt")
+
+# ---------- ElevenLabs ----------
+def gen_voice(text):
+    print("🔊  Génération voix-off…")
+    voice_id = "TxGEqnHWrfWFTfGW9XjX"   # voix FR « Warm »
+    headers = {
+        "xi-api-key": os.environ["ELEVEN_KEY"],
+        "Content-Type": "application/json"
+    }
+    body = {"text": text, "model_id": "eleven_multilingual_v2"}
+    wav = requests.post(
+        f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream",
+        headers=headers, json=body).content
+    open("voice.mp3","wb").write(wav)
+    print("✅ voice.mp3 prêt")
+
+# ---------- Fusion FFmpeg ----------
+def merge():
+    print("🎬  Fusion…")
+    subprocess.run([
+        "ffmpeg","-i","clip.mp4","-i","voice.mp3",
+        "-c:v","copy","-c:a","aac","-shortest","output.mp4",
+        "-loglevel","quiet","-y"
+    ])
+    print("🏁 output.mp4 généré")
+
+# ---------- EXÉCUTION ----------
 if __name__ == "__main__":
-    create_black_clip()
+    idea = generate_idea()
+    gen_video(idea["runway_prompt"])
+    gen_voice(idea["voice"])
+    merge()
