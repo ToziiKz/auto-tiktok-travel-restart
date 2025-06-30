@@ -39,7 +39,7 @@ def gen_video(prompt: str) -> None:
     print("🎞️  Génération Runway…")
 
     headers = {
-        "Authorization": f"Bearer {os.environ['RUNWAY_KEY']}",
+        "Authorization": f"Token {os.environ['RUNWAY_KEY']}",
         "Content-Type": "application/json",
         "X-Runway-Version": "2024-11-06"     # version API obligatoire
     }
