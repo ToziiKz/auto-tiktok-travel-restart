@@ -35,9 +35,10 @@ def generate_idea():
 # ---------- ÉTAPE 2 : générer la vidéo Runway ----------
 def gen_video(prompt: str):
     print("🎞️  Génération Runway…")
-    headers = {
+        headers = {
         "Authorization": f"Bearer {os.environ['RUNWAY_KEY']}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "X-Runway-Version": "2024-11-06"    # ← ajoute cette ligne
     }
     body = {"prompt": prompt, "duration": DURATION}
 
