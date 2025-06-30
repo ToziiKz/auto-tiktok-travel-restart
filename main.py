@@ -41,7 +41,7 @@ def gen_video(prompt: str) -> None:
     headers = {
         "Authorization": f"Bearer {os.environ['RUNWAY_KEY']}",
         "Content-Type": "application/json",
-        "X-Runway-Version": "2024-11-06"     # version API obligatoire
+        "Runway-Version": "2024-11-06"     # version API obligatoire
     }
 
     body = {"prompt": prompt, "duration": DURATION}
