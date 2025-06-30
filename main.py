@@ -129,9 +129,34 @@ def merge() -> None:
 
 # ───────── PIPELINE COMPLET ─────────
 if __name__ == "__main__":
+    # Étape 1 : Générer l'idée
     idea_data = generate_idea()
+    if not idea_data:
+        print("🛑 Arrêt du script : la génération d'idée a échoué.")
+        exit()  # Quitte le script
+
+    # Étape 2 : Générer la vidéo
+    # Assurez-vous que les 2 lignes ci-dessous sont bien décalées de 4 espaces
     if not generate_video(idea_data["runway_prompt"]):
-    print("🛑 Arrêt du script car la génération vidéo a échoué.")
-    return # ou exit()
-    gen_voice(idea_data["voice"])
-    merge()
+        print("🛑 Arrêt du script : la génération vidéo a échoué.")
+        exit()  # Quitte le script
+
+    # Étape 3 : Générer la voix
+    # Assurez-vous que les 2 lignes ci-dessous sont bien décalées de 4 espaces
+    if not generate_voice(idea_data["voice"]):
+        print("🛑 Arrêt du script : la génération de la voix a échoué.")
+        exit()  # Quitte le script
+
+    # Étape 4 : Fusionner
+    # Assurez-vous que les 2 lignes ci-dessous sont bien décalées de 4 espaces
+    if not merge_video_audio():
+        print("🛑 Arrêt du script : la fusion a échoué.")
+        exit()  # Quitte le script
+        
+    # Si tout s'est bien passé, on nettoie et on affiche le résumé
+    cleanup()
+    
+    print("\n🎉 Mission accomplie ! La vidéo est prête. 🎉")
+    print(f"Titre : {idea_data['title']}")
+    print(f"Description : {idea_data['description']}")
+    print(f"Hashtags : {' '.join(['#' + tag for tag in idea_data['hashtags'].split()])}")
